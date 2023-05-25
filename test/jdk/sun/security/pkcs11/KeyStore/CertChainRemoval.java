@@ -99,6 +99,9 @@ public class CertChainRemoval extends PKCS11Test {
                 throw new RuntimeException("Fail: " + alias + " not removed");
             }
         } else {
+            if (chain == null) {
+                throw new RuntimeException("Fail: "+ alias + " chain is null");
+            }
             if (!c.equals(expChain[0]) || !Arrays.equals(chain, expChain)) {
                 System.out.println("expChain: " + expChain.length);
                 System.out.println("actualChain: " + chain.length);
@@ -126,20 +129,31 @@ public class CertChainRemoval extends PKCS11Test {
         // get the necessary keys from the temp keystore
         Key pk1PrivKey = sunks.getKey("pk1", TEMP.passwd);
         Certificate pk1Cert = sunks.getCertificate("pk1");
+        if (pk1Cert == null) {
+            throw new RuntimeException("No pk1 certificate");
+        }
         Key caPrivKey = sunks.getKey("ca1", TEMP.passwd);
         Certificate ca1Cert = sunks.getCertificate("ca1");
+        if (ca1Cert == null){
+            throw new RuntimeException("No ca1 certificate");
+        }
         Key rootPrivKey = sunks.getKey("root", TEMP.passwd);
         Certificate rootCert = sunks.getCertificate("root");
-
+        if (rootCert == null){
+            throw new RuntimeException("No root certificate");
+        }
         Certificate[] pk1Chain = { pk1Cert, ca1Cert, rootCert };
         Certificate[] ca1Chain = { ca1Cert, rootCert };
         Certificate[] rootChain = { rootCert };
 
         // populate keystore with "pk1" and "ca", then delete "pk1"
-        System.out.println("Add pk1, ca1 and root, then delete pk1");
-        p11ks.setKeyEntry("pk1", pk1PrivKey, null, pk1Chain);
-        p11ks.setKeyEntry("ca1", caPrivKey, null, ca1Chain);
+        System.out.println("Add root");
         p11ks.setKeyEntry("root", rootPrivKey, null, rootChain);
+        System.out.println("Add ca1");
+        p11ks.setKeyEntry("ca1", caPrivKey, null, ca1Chain);
+        System.out.println("Add pk1");
+        p11ks.setKeyEntry("pk1", pk1PrivKey, null, pk1Chain);
+        System.out.println("Delete pk1");
         p11ks.deleteEntry("pk1");
 
         // reload the keystore
@@ -148,9 +162,9 @@ public class CertChainRemoval extends PKCS11Test {
         printKeyStore("Reload#1: ca1 / root", p11ks);
 
         // should only have "ca1" and "root"
+        checkEntry(p11ks, "root", rootChain);
         checkEntry(p11ks, "pk1", null);
         checkEntry(p11ks, "ca1", ca1Chain);
-        checkEntry(p11ks, "root", rootChain);
 
         // now add "pk1" and delete "ca1"
         System.out.println("Now add pk1 and delete ca1");
