@@ -50,31 +50,31 @@ public class JspawnhelperProtocol {
     private static final String[] CMD = { "pwd" };
     private static final String ENV_KEY = "JTREG_JSPAWNHELPER_PROTOCOL_TEST";
 
-    private static void parentCode(String arg) throws IOException, InterruptedException {
+    private static int parentCode(String arg) throws IOException, InterruptedException {
         System.out.println("Recursively executing 'JspawnhelperProtocol " + arg + "'");
         Process p = null;
         try {
             p = Runtime.getRuntime().exec(CMD);
         } catch (Exception e) {
             e.printStackTrace(System.out);
-            System.exit(ERROR);
+            return ERROR;
         }
         if (!p.waitFor(TIMEOUT, TimeUnit.SECONDS)) {
             System.out.println("Child process timed out");
-            System.exit(ERROR + 1);
+            return ERROR + 1;
         }
         if (p.exitValue() == 0) {
             String pwd = p.inputReader().readLine();
             String realPwd = Path.of("").toAbsolutePath().toString();
             if (!realPwd.equals(pwd)) {
                 System.out.println("Child process returned '" + pwd + "' (expected '" + realPwd + "')");
-                System.exit(ERROR + 2);
+                return ERROR + 2;
             }
             System.out.println("  Successfully executed '" + CMD[0] + "'");
-            System.exit(0);
+            return 0;
         } else {
             System.out.println("  Failed to executed '" + CMD[0] + "' (exitValue=" + p.exitValue() + ")");
-            System.exit(ERROR + 3);
+            return ERROR + 3;
         }
     }
 
@@ -93,22 +93,22 @@ public class JspawnhelperProtocol {
         }
     }
 
-    private static void jspawnhelperWithNoArgs() throws Exception {
+    private static int jspawnhelperWithNoArgs() throws Exception {
         System.out.println("Running jspawnhelper without args");
         Process p = null;
         try {
             p = Runtime.getRuntime().exec(Paths.get(System.getProperty("java.home"), "lib", "jspawnhelper").toString());
         } catch (Exception e) {
             e.printStackTrace(System.out);
-            System.exit(ERROR);
+            return ERROR;
         }
         if (!p.waitFor(TIMEOUT, TimeUnit.SECONDS)) {
             System.out.println("Child process timed out");
-            System.exit(ERROR + 1);
+            return ERROR + 1;
         }
         if (p.exitValue() != 1)
-            System.exit(ERROR + 2);
-        System.exit(0);
+            return ERROR + 2;
+        return 0;
     }
 
     private static void simulateJspawnhelperWithoutArgs() throws Exception {
@@ -257,10 +257,12 @@ public class JspawnhelperProtocol {
         //    don't lead to deadlocks or zombie processes.
         if (args.length > 0) {
             // Entry point for recursive execution in the "parent" process
+            int ret = 0;
             if ("noargs".equals(args[0]))
-                jspawnhelperWithNoArgs();
+                ret = jspawnhelperWithNoArgs();
             else
-                parentCode(args[0]);
+                ret = parentCode(args[0]);
+            System.exit(ret);
         } else {
             // Main test entry for execution from jtreg
             normalExec();
