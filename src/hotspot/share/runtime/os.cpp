@@ -172,21 +172,23 @@ char* os::iso8601_time(jlong milliseconds_since_19700101, char* buffer, size_t b
     }
   }
 
-  const time_t seconds_per_minute = 60;
-  const time_t minutes_per_hour = 60;
-  const time_t seconds_per_hour = seconds_per_minute * minutes_per_hour;
+  const int seconds_per_minute = 60;
+  const int minutes_per_hour = 60;
+  const int seconds_per_hour = seconds_per_minute * minutes_per_hour;
 
   // No offset when dealing with UTC
-  time_t UTC_to_local = 0;
+  long UTC_to_local = 0;
   if (!utc) {
 #if (defined(_ALLBSD_SOURCE) || defined(_GNU_SOURCE)) && !defined(AIX)
     UTC_to_local = -(time_struct.tm_gmtoff);
 #elif defined(_WINDOWS)
     long zone;
     _get_timezone(&zone);
-    UTC_to_local = static_cast<time_t>(zone);
+    UTC_to_local = zone;
 #else
-    UTC_to_local = timezone;
+    // Note: I do not have AIX to test, so not really sure
+    // if the cast here is needed.
+    UTC_to_local = static_cast<long>(timezone);
 #endif
 
     // tm_gmtoff already includes adjustment for daylight saving
@@ -204,24 +206,24 @@ char* os::iso8601_time(jlong milliseconds_since_19700101, char* buffer, size_t b
   //    between UTC and local time.
   //    ISO 8601 says we need the difference between local time and UTC,
   //    we change the sign of the localtime_pd() result.
-  const time_t local_to_UTC = -(UTC_to_local);
+  const long local_to_UTC = -(UTC_to_local);
   // Then we have to figure out if if we are ahead (+) or behind (-) UTC.
   char sign_local_to_UTC = '+';
-  time_t abs_local_to_UTC = local_to_UTC;
+  long abs_local_to_UTC = local_to_UTC;
   if (local_to_UTC < 0) {
     sign_local_to_UTC = '-';
     abs_local_to_UTC = -(abs_local_to_UTC);
   }
   // Convert time zone offset seconds to hours and minutes.
-  const int zone_hours = static_cast<int>(abs_local_to_UTC / seconds_per_hour);
-  const int zone_min =
-    static_cast<int>((abs_local_to_UTC % seconds_per_hour) / seconds_per_minute);
+  const long zone_hours = abs_local_to_UTC / seconds_per_hour;
+  const long zone_min =
+    (abs_local_to_UTC % seconds_per_hour) / seconds_per_minute;
 
   // Print an ISO 8601 date and time stamp into the buffer
   const int year = 1900 + time_struct.tm_year;
   const int month = 1 + time_struct.tm_mon;
   const int printed = jio_snprintf(buffer, buffer_length,
-                                   "%04d-%02d-%02dT%02d:%02d:%02d.%03d%c%02d%02d",
+                                   "%04d-%02d-%02dT%02d:%02d:%02d.%03d%c%02ld%02ld",
                                    year,
                                    month,
                                    time_struct.tm_mday,
