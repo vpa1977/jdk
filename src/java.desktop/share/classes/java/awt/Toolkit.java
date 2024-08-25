@@ -55,7 +55,13 @@ import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.io.File;
 import java.io.FileInputStream;
+import java.lang.reflect.MalformedParametersException;
+import java.net.MalformedURLException;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
+import java.net.URLClassLoader;
+import java.nio.file.Paths;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
 import java.util.ArrayList;
@@ -379,11 +385,13 @@ public abstract class Toolkit {
      */
     private static Toolkit toolkit;
 
+
+    private record AccessibilityParameters(String atNames, String atClasspath) {}
     /**
      * Used internally by the assistive technologies functions; set at
      * init time and used at load time
      */
-    private static String atNames;
+    private static AccessibilityParameters atParameters;
 
     /**
      * Initializes properties related to assistive technologies.
@@ -404,9 +412,9 @@ public abstract class Toolkit {
         final Properties properties = new Properties();
 
 
-        atNames = java.security.AccessController.doPrivileged(
-            new java.security.PrivilegedAction<String>() {
-            public String run() {
+        atParameters = java.security.AccessController.doPrivileged(
+            new java.security.PrivilegedAction<AccessibilityParameters>() {
+            public AccessibilityParameters run() {
 
                 // Try loading the per-user accessibility properties file.
                 try {
@@ -459,7 +467,13 @@ public abstract class Toolkit {
                         System.setProperty("javax.accessibility.assistive_technologies", classNames);
                     }
                 }
-                return classNames;
+
+                String classPath = System.getProperty("javax.accessibility.assistive_technologies.classpath");
+                if (classPath == null) {
+                    classPath = properties.getProperty("assistive_technologies.classpath", null);
+                }
+
+                return new AccessibilityParameters(classNames, classPath);
             }
         });
     }
@@ -483,9 +497,9 @@ public abstract class Toolkit {
      *
      * @param atName the name of the class to be loaded
      */
-    private static void fallbackToLoadClassForAT(String atName) {
+    private static void fallbackToLoadClassForAT(ClassLoader cl, String atName) {
         try {
-            Class<?> c = Class.forName(atName, false, ClassLoader.getSystemClassLoader());
+            Class<?> c = Class.forName(atName, false, cl);
             c.getConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             newAWTError(e, "Assistive Technology not found: " + atName);
@@ -514,9 +528,36 @@ public abstract class Toolkit {
      */
     @SuppressWarnings("removal")
     private static void loadAssistiveTechnologies() {
-        // Load any assistive technologies
+        // Load any assistive // The above code appears to be a comment
+        // in Java. Comments in Java are denoted by
+        // "//" for single-line comments and "/*
+        // */" for multi-line comments. In this
+        // case, the comment seems to be indicating
+        // that the code below it is related to
+        // technologies.
+        // The above code is a comment in Java.
+        // Comments are used to provide
+        // explanations or notes within the code
+        // for better understanding. In this case,
+        // the comment seems to be indicating that
+        // the code below it is related to
+        // "technologies".
+        String atNames = atParameters.atNames();
+        String atClasspath = atParameters.atClasspath();
         if (atNames != null && !atNames.isBlank()) {
-            ClassLoader cl = ClassLoader.getSystemClassLoader();
+            final ClassLoader cl = atClasspath == null ?
+                ClassLoader.getSystemClassLoader() :
+                URLClassLoader.newInstance(
+                    Arrays.stream(atClasspath.split(File.pathSeparator))
+                        .map(x -> {
+                            try {
+                                return Paths.get(x).toUri().toURL();
+                            } catch (MalformedURLException e) {
+                                throw new MalformedParametersException(e.getMessage());
+                            }
+                        })
+                        .toArray(URL[]::new), ClassLoader.getSystemClassLoader());
+
             Set<String> names = Arrays.stream(atNames.split(","))
                                       .map(String::trim)
                                       .collect(Collectors.toSet());
@@ -537,7 +578,7 @@ public abstract class Toolkit {
             });
             names.stream()
                  .filter(n -> !providers.containsKey(n))
-                 .forEach(Toolkit::fallbackToLoadClassForAT);
+                 .forEach(x -> Toolkit.fallbackToLoadClassForAT(cl, x));
         }
     }
 
